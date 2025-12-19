@@ -1,15 +1,20 @@
-// Create canvas
+// --------------------
+// CANVAS SETUP
+// --------------------
 const canvas = new fabric.Canvas('canvas', {
   isDrawingMode: false,
   selection: true
 });
 
-// Set canvas size
 canvas.setHeight(500);
 canvas.setWidth(window.innerWidth - 20);
 
-// Tool state
+// --------------------
+// STATE
+// --------------------
 let currentTool = null;
+let waitingForTextPlacement = false;
+
 let colors = ['black', 'blue', 'red', 'green', 'yellow'];
 let colorIndex = 0;
 
@@ -19,6 +24,12 @@ let colorIndex = 0;
 function setTool(tool) {
   currentTool = tool;
   canvas.isDrawingMode = false;
+  waitingForTextPlacement = false;
+
+  if (tool === 'text') {
+    waitingForTextPlacement = true;
+    return;
+  }
 
   if (tool === 'pencil') {
     canvas.isDrawingMode = true;
@@ -42,22 +53,28 @@ function setTool(tool) {
 }
 
 // --------------------
-// ADD TEXT (AUTO KEYBOARD)
+// PLACE TEXT (ONE TIME ONLY)
 // --------------------
 canvas.on('mouse:down', function (opt) {
-  if (currentTool === 'text') {
-    const pointer = canvas.getPointer(opt.e);
-    const text = new fabric.IText('Type here', {
-      left: pointer.x,
-      top: pointer.y,
-      fill: colors[colorIndex],
-      fontSize: 24
-    });
-    canvas.add(text);
-    canvas.setActiveObject(text);
-    text.enterEditing();
-    text.hiddenTextarea.focus();
-  }
+  if (!waitingForTextPlacement) return;
+
+  const pointer = canvas.getPointer(opt.e);
+
+  const text = new fabric.IText('Type here', {
+    left: pointer.x,
+    top: pointer.y,
+    fill: colors[colorIndex],
+    fontSize: 24
+  });
+
+  canvas.add(text);
+  canvas.setActiveObject(text);
+  text.enterEditing();
+  text.hiddenTextarea.focus();
+
+  // Turn off text mode after one placement
+  waitingForTextPlacement = false;
+  currentTool = null;
 });
 
 // --------------------
@@ -84,7 +101,7 @@ function cycleColor() {
 }
 
 // --------------------
-// IMAGE / DOCUMENT UPLOAD (NO SQUISHING)
+// IMAGE / DOCUMENT UPLOAD (NO DISTORTION)
 // --------------------
 document.getElementById('fileInput').addEventListener('change', e => {
   const reader = new FileReader();
@@ -143,13 +160,5 @@ window.onload = () => {
 // --------------------
 // LIGHT / DARK MODE
 // --------------------
-const toggle = document.getElementById('themeToggle');
-toggle.onclick = () => {
-  document.body.classList.toggle('dark');
-  document.body.classList.toggle('light');
+const t
 
-  toggle.textContent =
-    document.body.classList.contains('dark')
-      ? '☀️ Light Mode'
-      : '🌙 Dark Mode';
-};
