@@ -34,6 +34,16 @@ function setTool(tool) {
   }
 }
 
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    const obj = canvas.getActiveObject();
+    if (obj) {
+      canvas.remove(obj);
+    }
+  }
+});
+
+
 canvas.on('mouse:down', function (opt) {
   if (currentTool === 'text') {
     const pointer = canvas.getPointer(opt.e);
