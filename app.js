@@ -160,5 +160,13 @@ window.onload = () => {
 // --------------------
 // LIGHT / DARK MODE
 // --------------------
-const t
+const toggle = document.getElementById('themeToggle');
+toggle.onclick = () => {
+  document.body.classList.toggle('dark');
+  document.body.classList.toggle('light');
 
+  toggle.textContent =
+    document.body.classList.contains('dark')
+      ? '☀️ Light Mode'
+      : '🌙 Dark Mode';
+};
