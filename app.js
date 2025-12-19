@@ -1,9 +1,16 @@
-const canvas = new fabric.Canvas('canvas', {
-  isDrawingMode: false
-});
+const scale = Math.min(
+  canvas.width / img.width,
+  canvas.height / img.height
+);
 
-canvas.setHeight(500);
-canvas.setWidth(window.innerWidth - 20);
+canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+  scaleX: scale,
+  scaleY: scale,
+  originX: 'center',
+  originY: 'center',
+  left: canvas.width / 2,
+  top: canvas.height / 2
+});
 
 let currentTool = null;
 let colors = ['black', 'blue', 'red', 'green', 'yellow'];
