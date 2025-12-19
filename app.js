@@ -15,14 +15,22 @@ function setTool(tool) {
 
   if (tool === 'pencil') {
     canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
     canvas.freeDrawingBrush.color = colors[colorIndex];
     canvas.freeDrawingBrush.width = 3;
   }
 
   if (tool === 'highlight') {
     canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
     canvas.freeDrawingBrush.color = 'rgba(255,255,0,0.4)';
     canvas.freeDrawingBrush.width = 15;
+  }
+
+  if (tool === 'erase') {
+    canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.EraserBrush(canvas);
+    canvas.freeDrawingBrush.width = 20;
   }
 }
 
