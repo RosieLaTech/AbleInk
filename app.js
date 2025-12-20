@@ -2,7 +2,6 @@
 // CANVAS SETUP
 // --------------------
 const canvas = new fabric.Canvas('canvas', {
-  isDrawingMode: false,
   selection: true
 });
 
@@ -23,39 +22,60 @@ let colorIndex = 0;
 // --------------------
 function setTool(tool) {
   currentTool = tool;
+  waitingForTextPlacement = false;
+  canvas.isDrawingMode = false;
+}
+
+// --------------------
+// DRAWING TOOLS
+// --------------------
+function enablePencil() {
+  canvas.isDrawingMode = true;
+  canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+  canvas.freeDrawingBrush.color = colors[colorIndex];
+  canvas.freeDrawingBrush.width = 3;
+}
+
+function enableHighlight() {
+  canvas.isDrawingMode = true;
+  canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+  canvas.freeDrawingBrush.color = 'rgba(255,255,0,0.4)';
+  canvas.freeDrawingBrush.width = 15;
+}
+
+// --------------------
+// BUTTON HANDLERS
+// --------------------
+function setTool(tool) {
+  currentTool = tool;
   canvas.isDrawingMode = false;
   waitingForTextPlacement = false;
 
   if (tool === 'text') {
     waitingForTextPlacement = true;
-    return;
   }
 
   if (tool === 'pencil') {
-    canvas.isDrawingMode = true;
-    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-    canvas.freeDrawingBrush.color = colors[colorIndex];
-    canvas.freeDrawingBrush.width = 3;
+    enablePencil();
   }
 
   if (tool === 'highlight') {
-    canvas.isDrawingMode = true;
-    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-    canvas.freeDrawingBrush.color = 'rgba(255,255,0,0.4)';
-    canvas.freeDrawingBrush.width = 15;
-  }
-
-  if (tool === 'erase') {
-    canvas.isDrawingMode = true;
-    canvas.freeDrawingBrush = new fabric.EraserBrush(canvas);
-    canvas.freeDrawingBrush.width = 20;
+    enableHighlight();
   }
 }
 
 // --------------------
-// PLACE TEXT (ONE TIME ONLY)
+// PLACE TEXT (ONE TIME)
 // --------------------
 canvas.on('mouse:down', function (opt) {
+  if (currentTool === 'erase') {
+    const target = opt.target;
+    if (target) {
+      canvas.remove(target);
+    }
+    return;
+  }
+
   if (!waitingForTextPlacement) return;
 
   const pointer = canvas.getPointer(opt.e);
@@ -72,20 +92,17 @@ canvas.on('mouse:down', function (opt) {
   text.enterEditing();
   text.hiddenTextarea.focus();
 
-  // Turn off text mode after one placement
   waitingForTextPlacement = false;
   currentTool = null;
 });
 
 // --------------------
-// DELETE TEXT / OBJECTS
+// KEYBOARD DELETE
 // --------------------
-document.addEventListener('keydown', function (e) {
+document.addEventListener('keydown', e => {
   if (e.key === 'Delete' || e.key === 'Backspace') {
     const obj = canvas.getActiveObject();
-    if (obj) {
-      canvas.remove(obj);
-    }
+    if (obj) canvas.remove(obj);
   }
 });
 
@@ -101,7 +118,7 @@ function cycleColor() {
 }
 
 // --------------------
-// IMAGE / DOCUMENT UPLOAD (NO DISTORTION)
+// IMAGE UPLOAD (NO DISTORTION)
 // --------------------
 document.getElementById('fileInput').addEventListener('change', e => {
   const reader = new FileReader();
@@ -130,7 +147,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
 });
 
 // --------------------
-// EXPORT IMAGE
+// EXPORT
 // --------------------
 function exportImage() {
   const dataURL = canvas.toDataURL({ format: 'png' });
@@ -141,7 +158,7 @@ function exportImage() {
 }
 
 // --------------------
-// SAVE / LOAD (LOCAL DEVICE)
+// SAVE / LOAD
 // --------------------
 function saveDoc() {
   localStorage.setItem('savedCanvas', JSON.stringify(canvas.toJSON()));
@@ -151,9 +168,7 @@ function saveDoc() {
 window.onload = () => {
   const saved = localStorage.getItem('savedCanvas');
   if (saved) {
-    canvas.loadFromJSON(saved, () => {
-      canvas.renderAll();
-    });
+    canvas.loadFromJSON(saved, canvas.renderAll.bind(canvas));
   }
 };
 
@@ -164,7 +179,6 @@ const toggle = document.getElementById('themeToggle');
 toggle.onclick = () => {
   document.body.classList.toggle('dark');
   document.body.classList.toggle('light');
-
   toggle.textContent =
     document.body.classList.contains('dark')
       ? '☀️ Light Mode'
