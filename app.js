@@ -60,18 +60,22 @@ function openEditor() {
 }
 
 // --------------------
-// LIBRARY
+// LIBRARY WITH THUMBNAILS
 // --------------------
 function loadLibrary() {
   const list = document.getElementById('docList');
   list.innerHTML = '';
 
   Object.keys(localStorage)
-    .filter(k => k.startsWith(`${studentID}-doc-`))
+    .filter(k => k.startsWith(`${studentID}-doc-`) && !k.endsWith('-thumb'))
     .forEach(key => {
+      const thumbKey = `${key}-thumb`;
+      const thumbData = localStorage.getItem(thumbKey);
+
       const item = document.createElement('div');
       item.className = 'docItem';
       item.innerHTML = `
+        <img src="${thumbData || 'placeholder.png'}" style="width:80px; height:60px; object-fit:cover; margin-right:10px;">
         <span>${key.replace(`${studentID}-doc-`, '')}</span>
         <button onclick="deleteDoc('${key}')">🗑</button>
       `;
@@ -80,6 +84,9 @@ function loadLibrary() {
     });
 }
 
+// --------------------
+// CREATE / LOAD / DELETE DOCUMENT
+// --------------------
 function createNewDoc() {
   const name = prompt('Document name?');
   if (!name) return;
@@ -99,11 +106,12 @@ function loadDoc(id) {
 
 function deleteDoc(id) {
   localStorage.removeItem(id);
+  localStorage.removeItem(`${id}-thumb`);
   loadLibrary();
 }
 
 // --------------------
-// AUTOSAVE
+// AUTOSAVE + THUMBNAIL
 // --------------------
 function autosave() {
   document.getElementById('autosaveStatus').textContent = 'Saving…';
@@ -117,7 +125,13 @@ function autosave() {
 
 function saveDoc() {
   if (!currentDocId) return;
+
+  // Save canvas JSON
   localStorage.setItem(currentDocId, JSON.stringify(canvas.toJSON()));
+
+  // Save thumbnail (small snapshot)
+  const thumb = canvas.toDataURL({ format: 'png', width: 160, height: 120 });
+  localStorage.setItem(`${currentDocId}-thumb`, thumb);
 }
 
 // --------------------
@@ -145,4 +159,152 @@ function setTool(tool) {
     canvas.isDrawingMode = true;
     canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
     canvas.freeDrawingBrush.color = 'rgba(255,255,0,0.4)';
-    canvas.freeD
+    canvas.freeDrawingBrush.width = 15;
+  }
+}
+
+canvas.on('mouse:down', opt => {
+  if (currentTool === 'erase' && opt.target) {
+    canvas.remove(opt.target);
+    return;
+  }
+
+  if (!waitingForTextPlacement) return;
+
+  const p = canvas.getPointer(opt.e);
+  const text = new fabric.IText('Type here', {
+    left: p.x,
+    top: p.y,
+    fontSize: 24,
+    fill: colors[colorIndex]
+  });
+
+  canvas.add(text);
+  text.enterEditing();
+  waitingForTextPlacement = false;
+});
+
+// --------------------
+// TEXT SIZE
+// --------------------
+function increaseText() {
+  const o = canvas.getActiveObject();
+  if (o && o.type === 'i-text') o.fontSize += 2;
+  canvas.renderAll();
+}
+
+function decreaseText() {
+  const o = canvas.getActiveObject();
+  if (o && o.type === 'i-text' && o.fontSize > 10) o.fontSize -= 2;
+  canvas.renderAll();
+}
+
+// --------------------
+// COLORS
+// --------------------
+function cycleColor() {
+  colorIndex = (colorIndex + 1) % colors.length;
+  if (canvas.freeDrawingBrush) canvas.freeDrawingBrush.color = colors[colorIndex];
+}
+
+// --------------------
+// UNDO / REDO
+// --------------------
+let history = [];
+let step = -1;
+
+function saveHistory() {
+  history = history.slice(0, step + 1);
+  history.push(JSON.stringify(canvas.toJSON()));
+  step++;
+}
+
+canvas.on('object:added', saveHistory);
+
+function undo() {
+  if (step > 0) {
+    step--;
+    canvas.loadFromJSON(history[step], canvas.renderAll.bind(canvas));
+  }
+}
+
+function redo() {
+  if (step < history.length - 1) {
+    step++;
+    canvas.loadFromJSON(history[step], canvas.renderAll.bind(canvas));
+  }
+}
+
+// --------------------
+// ZOOM
+// --------------------
+let zoom = 1;
+function zoomIn() {
+  zoom = Math.min(2, zoom + 0.1);
+  canvas.setZoom(zoom);
+}
+function zoomOut() {
+  zoom = Math.max(0.5, zoom - 0.1);
+  canvas.setZoom(zoom);
+}
+
+// --------------------
+// PDF SUPPORT
+// --------------------
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.type === 'application/pdf') {
+    pdfjsLib.getDocument(URL.createObjectURL(file)).promise.then(pdf => {
+      pdfDoc = pdf;
+      currentPage = 1;
+      renderPdfPage();
+    });
+  } else {
+    const reader = new FileReader();
+    reader.onload = f => {
+      fabric.Image.fromURL(f.target.result, img => {
+        canvas.clear();
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        img.scale(scale);
+        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+function renderPdfPage() {
+  pdfDoc.getPage(currentPage).then(page => {
+    const viewport = page.getViewport({ scale: 2 });
+    const temp = document.createElement('canvas');
+    const ctx = temp.getContext('2d');
+
+    temp.width = viewport.width;
+    temp.height = viewport.height;
+
+    page.render({ canvasContext: ctx, viewport }).promise.then(() => {
+      fabric.Image.fromURL(temp.toDataURL(), img => {
+        canvas.clear();
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        img.scale(scale);
+        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+      });
+    });
+  });
+}
+
+function nextPage() {
+  if (pdfDoc && currentPage < pdfDoc.numPages) {
+    currentPage++;
+    renderPdfPage();
+  }
+}
+
+function prevPage() {
+  if (pdfDoc && currentPage > 1) {
+    currentPage--;
+    renderPdfPage();
+  }
+}
