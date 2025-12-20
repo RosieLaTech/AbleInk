@@ -10,11 +10,9 @@
       margin: 0;
       font-family: Arial, sans-serif;
     }
-    .hidden {
-      display: none;
-    }
+    .hidden { display: none; }
     #toolbarFrame {
-      background-color: #add8e6; /* Light blue */
+      background-color: #add8e6; /* light blue */
       padding: 10px;
       display: flex;
       align-items: center;
@@ -31,23 +29,17 @@
       height: calc(100vh - 70px);
       position: relative;
     }
-    #canvas {
-      background-color: white;
-      display: block;
-    }
+    #canvas { background-color: white; display: block; }
     #docList .docItem {
-      display: flex;
-      align-items: center;
-      margin-bottom: 5px;
-      cursor: pointer;
+      display: flex; align-items: center; margin-bottom: 5px; cursor: pointer;
     }
-    #docList .docItem img {
-      border: 1px solid #888;
-    }
+    #docList .docItem img { border: 1px solid #888; }
+    .active { border: 2px solid #000; }
   </style>
 </head>
 <body>
-  <!-- Toolbar Frame -->
+
+  <!-- Toolbar -->
   <div id="toolbarFrame">
     <button id="fileInputButton">Import</button>
     <input type="file" id="fileInput" style="display:none;">
@@ -59,24 +51,144 @@
     <button onclick="redo()">Redo</button>
     <button onclick="zoomIn()">Zoom In</button>
     <button onclick="zoomOut()">Zoom Out</button>
-    <span id="autosaveStatus" style="margin-left: auto;">Saved ✓</span>
+    <span id="autosaveStatus" style="margin-left:auto;">Saved ✓</span>
   </div>
 
-  <!-- Workspace Frame -->
+  <!-- Workspace -->
   <div id="workspaceFrame">
     <canvas id="canvas"></canvas>
   </div>
 
-  <!-- Library Screen (hidden initially) -->
+  <!-- Library Screen -->
   <div id="libraryScreen" class="hidden">
     <button onclick="createNewDoc()">New Document</button>
     <div id="docList"></div>
   </div>
 
-  <!-- Editor Screen -->
   <div id="editorScreen"></div>
 
-  <!-- Link to your JS file -->
-  <script src="app.js"></script>
+  <!-- JS -->
+  <script>
+    // -------------------- GLOBAL --------------------
+    let canvas, currentTool = null, waitingForTextPlacement=false;
+    let colors = ['black','blue','red','green','orange'], colorIndex=0;
+    let currentDocId=null, autosaveTimer=null, pdfDoc=null, currentPage=1;
+
+    // STUDENT ID
+    let studentID = localStorage.getItem('studentID');
+    if(!studentID){ studentID='student-'+Math.floor(Math.random()*100000); localStorage.setItem('studentID', studentID); }
+
+    // -------------------- CANVAS --------------------
+    function initCanvas(){
+      canvas = new fabric.Canvas('canvas', {preserveObjectStacking:true});
+      resizeCanvas();
+      canvas.on('object:added', autosave); canvas.on('object:modified', autosave); canvas.on('object:removed', autosave);
+      canvas.on('object:added', saveHistory);
+      window.addEventListener('resize', resizeCanvas);
+    }
+    function resizeCanvas(){
+      const frame = document.getElementById('workspaceFrame');
+      canvas.setHeight(frame.clientHeight); canvas.setWidth(frame.clientWidth); canvas.renderAll();
+    }
+    window.onload = initCanvas;
+
+    // -------------------- LIBRARY --------------------
+    function loadLibrary(){
+      const list = document.getElementById('docList'); list.innerHTML='';
+      Object.keys(localStorage).filter(k=>k.startsWith(studentID+'-doc-') && !k.endsWith('-thumb')).forEach(key=>{
+        const thumbKey = key+'-thumb'; const thumbData = localStorage.getItem(thumbKey);
+        const item = document.createElement('div'); item.className='docItem';
+        item.innerHTML=`<img src="${thumbData||'placeholder.png'}" style="width:80px;height:60px;object-fit:cover;margin-right:10px;">
+          <span>${key.replace(studentID+'-doc-','')}</span>
+          <button onclick="deleteDoc('${key}')">🗑</button>`;
+        item.onclick=()=>loadDoc(key); list.appendChild(item);
+      });
+    }
+    function createNewDoc(){
+      const name=prompt('Document name?'); if(!name)return;
+      currentDocId=studentID+'-doc-'+name; canvas.clear(); saveDoc();
+    }
+    function loadDoc(id){ currentDocId=id; canvas.loadFromJSON(localStorage.getItem(id), canvas.renderAll.bind(canvas)); }
+    function deleteDoc(id){ localStorage.removeItem(id); localStorage.removeItem(id+'-thumb'); loadLibrary(); }
+
+    // -------------------- AUTOSAVE --------------------
+    function autosave(){ clearTimeout(autosaveTimer); autosaveTimer=setTimeout(()=>saveDoc(),500); document.getElementById('autosaveStatus').textContent='Saving…'; }
+    function saveDoc(){
+      if(!currentDocId)return;
+      localStorage.setItem(currentDocId, JSON.stringify(canvas.toJSON()));
+      const tempCanvas = new fabric.StaticCanvas(null,{width:160,height:120});
+      tempCanvas.loadFromJSON(canvas.toJSON(),()=>{ const thumb=tempCanvas.toDataURL({format:'png'}); localStorage.setItem(currentDocId+'-thumb',thumb); document.getElementById('autosaveStatus').textContent='Saved ✓'; });
+    }
+
+    // -------------------- TOOLS --------------------
+    function setTool(tool){
+      currentTool=tool; canvas.isDrawingMode=false; waitingForTextPlacement=false;
+      document.querySelectorAll('#toolbarFrame button').forEach(b=>b.classList.remove('active'));
+      const btn=document.getElementById('tool-'+tool); if(btn)btn.classList.add('active');
+      if(tool==='text') waitingForTextPlacement=true;
+      if(tool==='pencil'){ canvas.isDrawingMode=true; canvas.freeDrawingBrush=new fabric.PencilBrush(canvas); canvas.freeDrawingBrush.color=colors[colorIndex]; canvas.freeDrawingBrush.width=3; }
+      if(tool==='highlight'){ canvas.isDrawingMode=true; canvas.freeDrawingBrush=new fabric.PencilBrush(canvas); canvas.freeDrawingBrush.color='rgba(255,255,0,0.4)'; canvas.freeDrawingBrush.width=15; }
+      if(tool==='erase'){ canvas.isDrawingMode=true; canvas.freeDrawingBrush=new fabric.EraserBrush(canvas); canvas.freeDrawingBrush.width=20; }
+    }
+    document.getElementById('tool-pencil').onclick=()=>setTool('pencil');
+    document.getElementById('tool-highlight').onclick=()=>setTool('highlight');
+    document.getElementById('tool-erase').onclick=()=>setTool('erase');
+    document.getElementById('tool-text').onclick=()=>setTool('text');
+
+    canvas.on('mouse:down',opt=>{
+      if(currentTool==='erase' && opt.target){ canvas.remove(opt.target); return; }
+      if(!waitingForTextPlacement) return;
+      const p=canvas.getPointer(opt.e);
+      const text=new fabric.IText('Type here',{left:p.x,top:p.y,fontSize:24,fill:colors[colorIndex]});
+      canvas.add(text); text.enterEditing(); waitingForTextPlacement=false;
+    });
+
+    // -------------------- COLORS --------------------
+    function cycleColor(){ colorIndex=(colorIndex+1)%colors.length; if(canvas.freeDrawingBrush) canvas.freeDrawingBrush.color=colors[colorIndex]; }
+
+    // -------------------- UNDO/REDO --------------------
+    let history=[],step=-1;
+    function saveHistory(){ history=history.slice(0,step+1); history.push(JSON.stringify(canvas.toJSON())); step++; }
+    function undo(){ if(step>0){ step--; canvas.loadFromJSON(history[step], canvas.renderAll.bind(canvas)); } }
+    function redo(){ if(step<history.length-1){ step++; canvas.loadFromJSON(history[step], canvas.renderAll.bind(canvas)); } }
+
+    // -------------------- ZOOM --------------------
+    let zoom=1; function zoomIn(){ zoom=Math.min(2,zoom+0.1); canvas.setZoom(zoom); }
+    function zoomOut(){ zoom=Math.max(0.5,zoom-0.1); canvas.setZoom(zoom); }
+
+    // -------------------- IMPORT --------------------
+    document.getElementById('fileInputButton').addEventListener('click',()=>{ document.getElementById('fileInput').click(); });
+    document.getElementById('fileInput').addEventListener('change', e=>{
+      const file=e.target.files[0]; if(!file)return;
+      if(file.type==='application/pdf'){
+        pdfjsLib.getDocument(URL.createObjectURL(file)).promise.then(pdf=>{ pdfDoc=pdf; currentPage=1; renderPdfPage(); });
+      }else{
+        const reader=new FileReader();
+        reader.onload=f=>{
+          fabric.Image.fromURL(f.target.result,img=>{
+            canvas.clear();
+            const scale=Math.min(canvas.width/img.width, canvas.height/img.height);
+            canvas.setBackgroundImage(img,()=>{ canvas.renderAll(); saveDoc(); }, { scaleX:scale, scaleY:scale, originX:'center', originY:'center', left:canvas.width/2, top:canvas.height/2 });
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+    function renderPdfPage(){ if(!pdfDoc) return;
+      pdfDoc.getPage(currentPage).then(page=>{
+        const viewport = page.getViewport({scale:2});
+        const temp=document.createElement('canvas'); const ctx=temp.getContext('2d');
+        temp.width=viewport.width; temp.height=viewport.height;
+        page.render({canvasContext:ctx,viewport}).promise.then(()=>{
+          fabric.Image.fromURL(temp.toDataURL(), img=>{
+            canvas.clear(); const scale=Math.min(canvas.width/img.width,canvas.height/img.height);
+            canvas.setBackgroundImage(img,()=>canvas.renderAll(), { scaleX:scale, scaleY:scale, originX:'center', originY:'center', left:canvas.width/2, top:canvas.height/2 });
+          });
+        });
+      });
+    }
+    function nextPage(){ if(pdfDoc && currentPage<pdfDoc.numPages){ currentPage++; renderPdfPage(); } }
+    function prevPage(){ if(pdfDoc && currentPage>1){ currentPage--; renderPdfPage(); } }
+  </script>
 </body>
 </html>
