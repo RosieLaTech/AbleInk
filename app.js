@@ -1,63 +1,128 @@
 // --------------------
-// CANVAS SETUP
+// GLOBAL STATE
 // --------------------
-const canvas = new fabric.Canvas('canvas', {
-  selection: true,
-  preserveObjectStacking: true
-});
-
-canvas.setHeight(500);
-canvas.setWidth(window.innerWidth - 20);
-
-// --------------------
-// STATE
-// --------------------
+let canvas;
 let currentTool = null;
 let waitingForTextPlacement = false;
-let backgroundLocked = true;
-let zoomLevel = 1;
 
-let colors = ['black', 'blue', 'red', 'green', 'yellow'];
+let colors = ['black', 'blue', 'red', 'green', 'orange'];
 let colorIndex = 0;
 
-// Undo / Redo
-let history = [];
-let historyStep = -1;
+let currentDocId = null;
+let autosaveTimer = null;
 
-function saveHistory() {
-  history = history.slice(0, historyStep + 1);
-  history.push(JSON.stringify(canvas.toJSON()));
-  historyStep++;
-}
-
-canvas.on('object:added', saveHistory);
-canvas.on('object:modified', saveHistory);
-canvas.on('object:removed', saveHistory);
+let pdfDoc = null;
+let currentPage = 1;
 
 // --------------------
-// TOOL UI HIGHLIGHT
+// INIT
 // --------------------
-function highlightTool(tool) {
-  document.querySelectorAll('.toolbar button').forEach(b => {
-    b.classList.remove('active');
+function initCanvas() {
+  canvas = new fabric.Canvas('canvas', {
+    preserveObjectStacking: true
   });
-  const btn = document.getElementById(`tool-${tool}`);
-  if (btn) btn.classList.add('active');
+
+  canvas.setHeight(window.innerHeight - 100);
+  canvas.setWidth(window.innerWidth - 20);
+
+  canvas.on('object:added', autosave);
+  canvas.on('object:modified', autosave);
+  canvas.on('object:removed', autosave);
+}
+
+window.onload = () => {
+  initCanvas();
+  loadLibrary();
+};
+
+// --------------------
+// SCREENS
+// --------------------
+function goHome() {
+  document.getElementById('editorScreen').classList.add('hidden');
+  document.getElementById('libraryScreen').classList.remove('hidden');
+  loadLibrary();
+}
+
+function openEditor() {
+  document.getElementById('libraryScreen').classList.add('hidden');
+  document.getElementById('editorScreen').classList.remove('hidden');
 }
 
 // --------------------
-// TOOL SELECTION
+// LIBRARY
+// --------------------
+function loadLibrary() {
+  const list = document.getElementById('docList');
+  list.innerHTML = '';
+
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('doc-'))
+    .forEach(key => {
+      const item = document.createElement('div');
+      item.className = 'docItem';
+      item.innerHTML = `
+        <span>${key.replace('doc-', '')}</span>
+        <button onclick="deleteDoc('${key}')">🗑</button>
+      `;
+      item.onclick = () => loadDoc(key);
+      list.appendChild(item);
+    });
+}
+
+function createNewDoc() {
+  const name = prompt('Document name?');
+  if (!name) return;
+
+  currentDocId = `doc-${name}`;
+  canvas.clear();
+  saveDoc();
+  openEditor();
+}
+
+function loadDoc(id) {
+  currentDocId = id;
+  const data = localStorage.getItem(id);
+  canvas.loadFromJSON(data, canvas.renderAll.bind(canvas));
+  openEditor();
+}
+
+function deleteDoc(id) {
+  localStorage.removeItem(id);
+  loadLibrary();
+}
+
+// --------------------
+// AUTOSAVE
+// --------------------
+function autosave() {
+  document.getElementById('autosaveStatus').textContent = 'Saving…';
+
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    saveDoc();
+    document.getElementById('autosaveStatus').textContent = 'Saved ✓';
+  }, 500);
+}
+
+function saveDoc() {
+  if (!currentDocId) return;
+  localStorage.setItem(currentDocId, JSON.stringify(canvas.toJSON()));
+}
+
+// --------------------
+// TOOLS
 // --------------------
 function setTool(tool) {
   currentTool = tool;
-  waitingForTextPlacement = false;
   canvas.isDrawingMode = false;
+  waitingForTextPlacement = false;
 
-  highlightTool(tool);
+  document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(`tool-${tool}`);
+  if (btn) btn.classList.add('active');
 
-  if (tool === 'text') {
-    waitingForTextPlacement = true;
-  }
+  if (tool === 'text') waitingForTextPlacement = true;
 
   if (tool === 'pencil') {
     canvas.isDrawingMode = true;
@@ -74,166 +139,148 @@ function setTool(tool) {
   }
 }
 
-// --------------------
-// PLACE TEXT / ERASE
-// --------------------
-canvas.on('mouse:down', function (opt) {
-  if (currentTool === 'erase') {
-    if (opt.target && opt.target !== canvas.backgroundImage) {
-      canvas.remove(opt.target);
-    }
+canvas.on('mouse:down', opt => {
+  if (currentTool === 'erase' && opt.target) {
+    canvas.remove(opt.target);
     return;
   }
 
   if (!waitingForTextPlacement) return;
 
-  const pointer = canvas.getPointer(opt.e);
+  const p = canvas.getPointer(opt.e);
   const text = new fabric.IText('Type here', {
-    left: pointer.x,
-    top: pointer.y,
-    fill: colors[colorIndex],
-    fontSize: 24
+    left: p.x,
+    top: p.y,
+    fontSize: 24,
+    fill: colors[colorIndex]
   });
 
   canvas.add(text);
-  canvas.setActiveObject(text);
   text.enterEditing();
-  text.hiddenTextarea.focus();
-
   waitingForTextPlacement = false;
-  currentTool = null;
 });
 
 // --------------------
-// TEXT SIZE CONTROLS
+// TEXT SIZE
 // --------------------
 function increaseText() {
-  const obj = canvas.getActiveObject();
-  if (obj && obj.type === 'i-text') {
-    obj.fontSize += 2;
-    canvas.renderAll();
-  }
+  const o = canvas.getActiveObject();
+  if (o && o.type === 'i-text') o.fontSize += 2;
+  canvas.renderAll();
 }
 
 function decreaseText() {
-  const obj = canvas.getActiveObject();
-  if (obj && obj.type === 'i-text' && obj.fontSize > 10) {
-    obj.fontSize -= 2;
-    canvas.renderAll();
-  }
+  const o = canvas.getActiveObject();
+  if (o && o.type === 'i-text' && o.fontSize > 10) o.fontSize -= 2;
+  canvas.renderAll();
 }
 
 // --------------------
-// COLOR CYCLING
+// COLORS
 // --------------------
 function cycleColor() {
   colorIndex = (colorIndex + 1) % colors.length;
-
-  if (canvas.isDrawingMode && canvas.freeDrawingBrush) {
-    canvas.freeDrawingBrush.color = colors[colorIndex];
-  }
-
-  const obj = canvas.getActiveObject();
-  if (obj && obj.set) {
-    obj.set('fill', colors[colorIndex]);
-    canvas.renderAll();
-  }
+  if (canvas.freeDrawingBrush) canvas.freeDrawingBrush.color = colors[colorIndex];
 }
 
 // --------------------
-// UNDO / REDO
+// UNDO / REDO (LIGHTWEIGHT)
 // --------------------
+let history = [];
+let step = -1;
+
+function saveHistory() {
+  history = history.slice(0, step + 1);
+  history.push(JSON.stringify(canvas.toJSON()));
+  step++;
+}
+
+canvas.on('object:added', saveHistory);
+
 function undo() {
-  if (historyStep > 0) {
-    historyStep--;
-    canvas.loadFromJSON(history[historyStep], canvas.renderAll.bind(canvas));
+  if (step > 0) {
+    step--;
+    canvas.loadFromJSON(history[step], canvas.renderAll.bind(canvas));
   }
 }
 
 function redo() {
-  if (historyStep < history.length - 1) {
-    historyStep++;
-    canvas.loadFromJSON(history[historyStep], canvas.renderAll.bind(canvas));
+  if (step < history.length - 1) {
+    step++;
+    canvas.loadFromJSON(history[step], canvas.renderAll.bind(canvas));
   }
-}
-
-// --------------------
-// IMAGE UPLOAD (LOCKABLE)
-// --------------------
-document.getElementById('fileInput').addEventListener('change', e => {
-  const reader = new FileReader();
-
-  reader.onload = f => {
-    fabric.Image.fromURL(f.target.result, img => {
-      canvas.clear();
-
-      const scale = Math.min(
-        canvas.width / img.width,
-        canvas.height / img.height
-      );
-
-      img.set({
-        selectable: !backgroundLocked,
-        evented: !backgroundLocked
-      });
-
-      canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
-        scaleX: scale,
-        scaleY: scale,
-        originX: 'center',
-        originY: 'center',
-        left: canvas.width / 2,
-        top: canvas.height / 2
-      });
-    });
-  };
-
-  reader.readAsDataURL(e.target.files[0]);
-});
-
-function toggleBackgroundLock() {
-  backgroundLocked = !backgroundLocked;
-  if (canvas.backgroundImage) {
-    canvas.backgroundImage.selectable = !backgroundLocked;
-    canvas.backgroundImage.evented = !backgroundLocked;
-  }
-  alert(backgroundLocked ? 'Background locked' : 'Background unlocked');
 }
 
 // --------------------
 // ZOOM
 // --------------------
+let zoom = 1;
 function zoomIn() {
-  zoomLevel = Math.min(2, zoomLevel + 0.1);
-  canvas.setZoom(zoomLevel);
+  zoom = Math.min(2, zoom + 0.1);
+  canvas.setZoom(zoom);
 }
-
 function zoomOut() {
-  zoomLevel = Math.max(0.5, zoomLevel - 0.1);
-  canvas.setZoom(zoomLevel);
+  zoom = Math.max(0.5, zoom - 0.1);
+  canvas.setZoom(zoom);
 }
 
 // --------------------
-// EXPORT / SAVE
+// PDF SUPPORT
 // --------------------
-function exportImage() {
-  const dataURL = canvas.toDataURL({ format: 'png' });
-  const link = document.createElement('a');
-  link.download = 'annotated.png';
-  link.href = dataURL;
-  link.click();
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.type === 'application/pdf') {
+    pdfjsLib.getDocument(URL.createObjectURL(file)).promise.then(pdf => {
+      pdfDoc = pdf;
+      currentPage = 1;
+      renderPdfPage();
+    });
+  } else {
+    const reader = new FileReader();
+    reader.onload = f => {
+      fabric.Image.fromURL(f.target.result, img => {
+        canvas.clear();
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        img.scale(scale);
+        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+function renderPdfPage() {
+  pdfDoc.getPage(currentPage).then(page => {
+    const viewport = page.getViewport({ scale: 2 });
+    const temp = document.createElement('canvas');
+    const ctx = temp.getContext('2d');
+
+    temp.width = viewport.width;
+    temp.height = viewport.height;
+
+    page.render({ canvasContext: ctx, viewport }).promise.then(() => {
+      fabric.Image.fromURL(temp.toDataURL(), img => {
+        canvas.clear();
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        img.scale(scale);
+        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+      });
+    });
+  });
 }
 
-function saveDoc() {
-  localStorage.setItem('savedCanvas', JSON.stringify(canvas.toJSON()));
-  alert('Saved on this device');
+function nextPage() {
+  if (pdfDoc && currentPage < pdfDoc.numPages) {
+    currentPage++;
+    renderPdfPage();
+  }
 }
 
-// --------------------
-// LIGHT / DARK MODE
-// --------------------
-const toggle = document.getElementById('themeToggle');
-toggle.onclick = () => {
-  document.body.classList.toggle('dark');
-  document.body.classList.toggle('light');
-};
+function prevPage() {
+  if (pdfDoc && currentPage > 1) {
+    currentPage--;
+    renderPdfPage();
+  }
+}
