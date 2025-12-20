@@ -168,6 +168,12 @@ function setTool(tool) {
     canvas.freeDrawingBrush.color = 'rgba(255,255,0,0.4)';
     canvas.freeDrawingBrush.width = 15;
   }
+
+  if (tool === 'erase') {
+    canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.EraserBrush(canvas);
+    canvas.freeDrawingBrush.width = 20;
+  }
 }
 
 canvas.on('mouse:down', opt => {
@@ -190,21 +196,6 @@ canvas.on('mouse:down', opt => {
   text.enterEditing();
   waitingForTextPlacement = false;
 });
-
-// --------------------
-// TEXT SIZE
-// --------------------
-function increaseText() {
-  const o = canvas.getActiveObject();
-  if (o && o.type === 'i-text') o.fontSize += 2;
-  canvas.renderAll();
-}
-
-function decreaseText() {
-  const o = canvas.getActiveObject();
-  if (o && o.type === 'i-text' && o.fontSize > 10) o.fontSize -= 2;
-  canvas.renderAll();
-}
 
 // --------------------
 // COLORS
@@ -256,7 +247,7 @@ function zoomOut() {
 }
 
 // --------------------
-// IMAGE / PDF IMPORT FIXED
+// IMAGE / PDF IMPORT
 // --------------------
 document.getElementById('fileInput').addEventListener('change', e => {
   const file = e.target.files[0];
