@@ -1,58 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Assistive Annotator</title>
-
+  <meta charset="UTF-8">
+  <title>Annotation App</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-
-  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.15.349/pdf.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+    .hidden {
+      display: none;
+    }
+    #toolbarFrame {
+      background-color: #add8e6; /* Light blue */
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    #toolbarFrame button {
+      margin-right: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    #workspaceFrame {
+      border: 2px solid #aaa;
+      margin-top: 5px;
+      height: calc(100vh - 70px);
+      position: relative;
+    }
+    #canvas {
+      background-color: white;
+      display: block;
+    }
+    #docList .docItem {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+      cursor: pointer;
+    }
+    #docList .docItem img {
+      border: 1px solid #888;
+    }
+  </style>
 </head>
+<body>
+  <!-- Toolbar Frame -->
+  <div id="toolbarFrame">
+    <button id="fileInputButton">Import</button>
+    <input type="file" id="fileInput" style="display:none;">
+    <button id="tool-pencil">Pencil</button>
+    <button id="tool-highlight">Highlight</button>
+    <button id="tool-erase">Erase</button>
+    <button id="tool-text">Text</button>
+    <button onclick="undo()">Undo</button>
+    <button onclick="redo()">Redo</button>
+    <button onclick="zoomIn()">Zoom In</button>
+    <button onclick="zoomOut()">Zoom Out</button>
+    <span id="autosaveStatus" style="margin-left: auto;">Saved ✓</span>
+  </div>
 
-<body class="light">
+  <!-- Workspace Frame -->
+  <div id="workspaceFrame">
+    <canvas id="canvas"></canvas>
+  </div>
 
-<!-- TOP TOOLBAR -->
-<header class="toolbar">
-  <button onclick="goHome()">📂 Library</button>
+  <!-- Library Screen (hidden initially) -->
+  <div id="libraryScreen" class="hidden">
+    <button onclick="createNewDoc()">New Document</button>
+    <div id="docList"></div>
+  </div>
 
-  <button id="tool-text" onclick="setTool('text')">Text</button>
-  <button id="tool-pencil" onclick="setTool('pencil')">Pencil</button>
-  <button id="tool-highlight" onclick="setTool('highlight')">Highlighter</button>
-  <button id="tool-erase" onclick="setTool('erase')">Erase</button>
+  <!-- Editor Screen -->
+  <div id="editorScreen"></div>
 
-  <button onclick="increaseText()">A+</button>
-  <button onclick="decreaseText()">A−</button>
-
-  <button onclick="undo()">Undo</button>
-  <button onclick="redo()">Redo</button>
-
-  <button onclick="prevPage()">⬅ Page</button>
-  <button onclick="nextPage()">Page ➡</button>
-
-  <button onclick="zoomOut()">−</button>
-  <button onclick="zoomIn()">+</button>
-
-  <button onclick="cycleColor()">Color</button>
-
-  <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf" hidden />
-  <button onclick="document.getElementById('fileInput').click()">Import</button>
-
-  <span id="autosaveStatus">Saved ✓</span>
-</header>
-
-<!-- LIBRARY SCREEN -->
-<section id="libraryScreen" class="screen">
-  <h2>My Documents</h2>
-  <button onclick="createNewDoc()">➕ New Document</button>
-  <div id="docList"></div>
-</section>
-
-<!-- CANVAS SCREEN -->
-<section id="editorScreen" class="screen hidden">
-  <canvas id="canvas"></canvas>
-</section>
-
-<script src="app.js"></script>
+  <!-- Link to your JS file -->
+  <script src="app.js"></script>
 </body>
 </html>
