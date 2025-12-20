@@ -129,9 +129,16 @@ function saveDoc() {
   // Save canvas JSON
   localStorage.setItem(currentDocId, JSON.stringify(canvas.toJSON()));
 
-  // Save thumbnail (small snapshot)
-  const thumb = canvas.toDataURL({ format: 'png', width: 160, height: 120 });
-  localStorage.setItem(`${currentDocId}-thumb`, thumb);
+  // Save thumbnail AFTER canvas is fully rendered
+  const tempCanvas = new fabric.StaticCanvas(null, {
+    width: 160,
+    height: 120
+  });
+  const json = canvas.toJSON();
+  tempCanvas.loadFromJSON(json, () => {
+    const thumb = tempCanvas.toDataURL({ format: 'png' });
+    localStorage.setItem(`${currentDocId}-thumb`, thumb);
+  });
 }
 
 // --------------------
@@ -249,7 +256,7 @@ function zoomOut() {
 }
 
 // --------------------
-// PDF SUPPORT
+// IMAGE / PDF IMPORT FIXED
 // --------------------
 document.getElementById('fileInput').addEventListener('change', e => {
   const file = e.target.files[0];
@@ -267,8 +274,17 @@ document.getElementById('fileInput').addEventListener('change', e => {
       fabric.Image.fromURL(f.target.result, img => {
         canvas.clear();
         const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-        img.scale(scale);
-        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+        canvas.setBackgroundImage(img, () => {
+          canvas.renderAll();
+          saveDoc(); // save thumbnail after image fully loads
+        }, {
+          scaleX: scale,
+          scaleY: scale,
+          originX: 'center',
+          originY: 'center',
+          left: canvas.width / 2,
+          top: canvas.height / 2
+        });
       });
     };
     reader.readAsDataURL(file);
@@ -288,8 +304,14 @@ function renderPdfPage() {
       fabric.Image.fromURL(temp.toDataURL(), img => {
         canvas.clear();
         const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-        img.scale(scale);
-        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+        canvas.setBackgroundImage(img, () => canvas.renderAll(), {
+          scaleX: scale,
+          scaleY: scale,
+          originX: 'center',
+          originY: 'center',
+          left: canvas.width / 2,
+          top: canvas.height / 2
+        });
       });
     });
   });
