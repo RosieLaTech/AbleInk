@@ -2,7 +2,8 @@
 // CANVAS SETUP
 // --------------------
 const canvas = new fabric.Canvas('canvas', {
-  selection: true
+  selection: true,
+  preserveObjectStacking: true
 });
 
 canvas.setHeight(500);
@@ -13,9 +14,36 @@ canvas.setWidth(window.innerWidth - 20);
 // --------------------
 let currentTool = null;
 let waitingForTextPlacement = false;
+let backgroundLocked = true;
+let zoomLevel = 1;
 
 let colors = ['black', 'blue', 'red', 'green', 'yellow'];
 let colorIndex = 0;
+
+// Undo / Redo
+let history = [];
+let historyStep = -1;
+
+function saveHistory() {
+  history = history.slice(0, historyStep + 1);
+  history.push(JSON.stringify(canvas.toJSON()));
+  historyStep++;
+}
+
+canvas.on('object:added', saveHistory);
+canvas.on('object:modified', saveHistory);
+canvas.on('object:removed', saveHistory);
+
+// --------------------
+// TOOL UI HIGHLIGHT
+// --------------------
+function highlightTool(tool) {
+  document.querySelectorAll('.toolbar button').forEach(b => {
+    b.classList.remove('active');
+  });
+  const btn = document.getElementById(`tool-${tool}`);
+  if (btn) btn.classList.add('active');
+}
 
 // --------------------
 // TOOL SELECTION
@@ -24,54 +52,35 @@ function setTool(tool) {
   currentTool = tool;
   waitingForTextPlacement = false;
   canvas.isDrawingMode = false;
-}
 
-// --------------------
-// DRAWING TOOLS
-// --------------------
-function enablePencil() {
-  canvas.isDrawingMode = true;
-  canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-  canvas.freeDrawingBrush.color = colors[colorIndex];
-  canvas.freeDrawingBrush.width = 3;
-}
-
-function enableHighlight() {
-  canvas.isDrawingMode = true;
-  canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-  canvas.freeDrawingBrush.color = 'rgba(255,255,0,0.4)';
-  canvas.freeDrawingBrush.width = 15;
-}
-
-// --------------------
-// BUTTON HANDLERS
-// --------------------
-function setTool(tool) {
-  currentTool = tool;
-  canvas.isDrawingMode = false;
-  waitingForTextPlacement = false;
+  highlightTool(tool);
 
   if (tool === 'text') {
     waitingForTextPlacement = true;
   }
 
   if (tool === 'pencil') {
-    enablePencil();
+    canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    canvas.freeDrawingBrush.color = colors[colorIndex];
+    canvas.freeDrawingBrush.width = 3;
   }
 
   if (tool === 'highlight') {
-    enableHighlight();
+    canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    canvas.freeDrawingBrush.color = 'rgba(255,255,0,0.4)';
+    canvas.freeDrawingBrush.width = 15;
   }
 }
 
 // --------------------
-// PLACE TEXT (ONE TIME)
+// PLACE TEXT / ERASE
 // --------------------
 canvas.on('mouse:down', function (opt) {
   if (currentTool === 'erase') {
-    const target = opt.target;
-    if (target) {
-      canvas.remove(target);
+    if (opt.target && opt.target !== canvas.backgroundImage) {
+      canvas.remove(opt.target);
     }
     return;
   }
@@ -79,7 +88,6 @@ canvas.on('mouse:down', function (opt) {
   if (!waitingForTextPlacement) return;
 
   const pointer = canvas.getPointer(opt.e);
-
   const text = new fabric.IText('Type here', {
     left: pointer.x,
     top: pointer.y,
@@ -97,14 +105,23 @@ canvas.on('mouse:down', function (opt) {
 });
 
 // --------------------
-// KEYBOARD DELETE
+// TEXT SIZE CONTROLS
 // --------------------
-document.addEventListener('keydown', e => {
-  if (e.key === 'Delete' || e.key === 'Backspace') {
-    const obj = canvas.getActiveObject();
-    if (obj) canvas.remove(obj);
+function increaseText() {
+  const obj = canvas.getActiveObject();
+  if (obj && obj.type === 'i-text') {
+    obj.fontSize += 2;
+    canvas.renderAll();
   }
-});
+}
+
+function decreaseText() {
+  const obj = canvas.getActiveObject();
+  if (obj && obj.type === 'i-text' && obj.fontSize > 10) {
+    obj.fontSize -= 2;
+    canvas.renderAll();
+  }
+}
 
 // --------------------
 // COLOR CYCLING
@@ -115,10 +132,33 @@ function cycleColor() {
   if (canvas.isDrawingMode && canvas.freeDrawingBrush) {
     canvas.freeDrawingBrush.color = colors[colorIndex];
   }
+
+  const obj = canvas.getActiveObject();
+  if (obj && obj.set) {
+    obj.set('fill', colors[colorIndex]);
+    canvas.renderAll();
+  }
 }
 
 // --------------------
-// IMAGE UPLOAD (NO DISTORTION)
+// UNDO / REDO
+// --------------------
+function undo() {
+  if (historyStep > 0) {
+    historyStep--;
+    canvas.loadFromJSON(history[historyStep], canvas.renderAll.bind(canvas));
+  }
+}
+
+function redo() {
+  if (historyStep < history.length - 1) {
+    historyStep++;
+    canvas.loadFromJSON(history[historyStep], canvas.renderAll.bind(canvas));
+  }
+}
+
+// --------------------
+// IMAGE UPLOAD (LOCKABLE)
 // --------------------
 document.getElementById('fileInput').addEventListener('change', e => {
   const reader = new FileReader();
@@ -131,6 +171,11 @@ document.getElementById('fileInput').addEventListener('change', e => {
         canvas.width / img.width,
         canvas.height / img.height
       );
+
+      img.set({
+        selectable: !backgroundLocked,
+        evented: !backgroundLocked
+      });
 
       canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
         scaleX: scale,
@@ -146,8 +191,30 @@ document.getElementById('fileInput').addEventListener('change', e => {
   reader.readAsDataURL(e.target.files[0]);
 });
 
+function toggleBackgroundLock() {
+  backgroundLocked = !backgroundLocked;
+  if (canvas.backgroundImage) {
+    canvas.backgroundImage.selectable = !backgroundLocked;
+    canvas.backgroundImage.evented = !backgroundLocked;
+  }
+  alert(backgroundLocked ? 'Background locked' : 'Background unlocked');
+}
+
 // --------------------
-// EXPORT
+// ZOOM
+// --------------------
+function zoomIn() {
+  zoomLevel = Math.min(2, zoomLevel + 0.1);
+  canvas.setZoom(zoomLevel);
+}
+
+function zoomOut() {
+  zoomLevel = Math.max(0.5, zoomLevel - 0.1);
+  canvas.setZoom(zoomLevel);
+}
+
+// --------------------
+// EXPORT / SAVE
 // --------------------
 function exportImage() {
   const dataURL = canvas.toDataURL({ format: 'png' });
@@ -157,20 +224,10 @@ function exportImage() {
   link.click();
 }
 
-// --------------------
-// SAVE / LOAD
-// --------------------
 function saveDoc() {
   localStorage.setItem('savedCanvas', JSON.stringify(canvas.toJSON()));
   alert('Saved on this device');
 }
-
-window.onload = () => {
-  const saved = localStorage.getItem('savedCanvas');
-  if (saved) {
-    canvas.loadFromJSON(saved, canvas.renderAll.bind(canvas));
-  }
-};
 
 // --------------------
 // LIGHT / DARK MODE
@@ -179,8 +236,4 @@ const toggle = document.getElementById('themeToggle');
 toggle.onclick = () => {
   document.body.classList.toggle('dark');
   document.body.classList.toggle('light');
-  toggle.textContent =
-    document.body.classList.contains('dark')
-      ? '☀️ Light Mode'
-      : '🌙 Dark Mode';
 };
