@@ -1,36 +1,69 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Assistive Annotation App</title>
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
 
-  <!-- Fabric.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  background: #f4f4f4;
+  border-bottom: 1px solid #ccc;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
 
-  <link rel="stylesheet" href="style.css" />
-</head>
+.toolbar button {
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
 
-<body class="light">
-  <header>
-    <h1>AbleInk</h1>
-    <button id="themeToggle">🌙 Dark Mode</button>
-  </header>
+.toolbar button.active {
+  background: #0078d4;
+  color: white;
+}
 
-  <main>
-    <input type="file" id="fileInput" accept="image/*" />
-    <canvas id="canvas"></canvas>
-  </main>
+#autosaveStatus {
+  margin-left: auto;
+  padding: 8px;
+  font-size: 13px;
+  opacity: 0.8;
+}
 
-  <nav class="toolbar">
-    <button onclick="setTool('text')">Add Text</button>
-    <button onclick="setTool('pencil')">Pencil</button>
-    <button onclick="setTool('highlight')">Highlighter</button>
-    <button onclick="cycleColor()">Colors</button>
-    <button onclick="saveDoc()">Save</button>
-    <button onclick="exportImage()">Export</button>
-  </nav>
+.screen {
+  padding: 15px;
+}
 
-  <script src="app.js"></script>
-</body>
-</html>
+.hidden {
+  display: none;
+}
+
+#docList {
+  margin-top: 15px;
+}
+
+.docItem {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  border: 1px solid #ccc;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+canvas {
+  border: 1px solid #ccc;
+}
+
+/* Dark Mode */
+body.dark {
+  background: #222;
+  color: #eee;
+}
+
+body.dark .toolbar {
+  background: #333;
+}
