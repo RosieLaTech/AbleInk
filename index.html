@@ -2,31 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Assistive Annotation App</title>
+  <title>Assistive Annotator</title>
 
-  <!-- Fabric.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body class="light">
-  <header>
-    <h1>AbleInk</h1>
-    <button id="themeToggle">🌙 Dark Mode</button>
-  </header>
 
-  <main>
-    <input type="file" id="fileInput" accept="image/*" />
-    <canvas id="canvas"></canvas>
-  </main>
+<!-- TOP TOOLBAR -->
+<header class="toolbar">
+  <button onclick="goHome()">📂 Library</button>
 
- <nav class="toolbar">
-  <button onclick="setTool('text')" id="tool-text">Add Text</button>
-  <button onclick="setTool('pencil')" id="tool-pencil">Pencil</button>
-  <button onclick="setTool('highlight')" id="tool-highlight">Highlighter</button>
-  <button onclick="setTool('erase')" id="tool-erase">Erase</button>
+  <button id="tool-text" onclick="setTool('text')">Text</button>
+  <button id="tool-pencil" onclick="setTool('pencil')">Pencil</button>
+  <button id="tool-highlight" onclick="setTool('highlight')">Highlighter</button>
+  <button id="tool-erase" onclick="setTool('erase')">Erase</button>
 
   <button onclick="increaseText()">A+</button>
   <button onclick="decreaseText()">A−</button>
@@ -34,16 +27,32 @@
   <button onclick="undo()">Undo</button>
   <button onclick="redo()">Redo</button>
 
-  <button onclick="toggleBackgroundLock()">Lock BG</button>
+  <button onclick="prevPage()">⬅ Page</button>
+  <button onclick="nextPage()">Page ➡</button>
 
-  <button onclick="zoomIn()">Zoom +</button>
-  <button onclick="zoomOut()">Zoom −</button>
+  <button onclick="zoomOut()">−</button>
+  <button onclick="zoomIn()">+</button>
 
-  <button onclick="cycleColor()">Colors</button>
-  <button onclick="saveDoc()">Save</button>
-  <button onclick="exportImage()">Export</button>
-</nav>
+  <button onclick="cycleColor()">Color</button>
 
-  <script src="app.js"></script>
+  <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf" hidden />
+  <button onclick="document.getElementById('fileInput').click()">Import</button>
+
+  <span id="autosaveStatus">Saved ✓</span>
+</header>
+
+<!-- LIBRARY SCREEN -->
+<section id="libraryScreen" class="screen">
+  <h2>My Documents</h2>
+  <button onclick="createNewDoc()">➕ New Document</button>
+  <div id="docList"></div>
+</section>
+
+<!-- CANVAS SCREEN -->
+<section id="editorScreen" class="screen hidden">
+  <canvas id="canvas"></canvas>
+</section>
+
+<script src="app.js"></script>
 </body>
 </html>
